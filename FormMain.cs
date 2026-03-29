@@ -370,7 +370,14 @@ namespace CardWeaver
 
         private void ChangeZoom(float factor)
         {
-            zoomFactor *= factor;
+            float newZoom = zoomFactor * factor;
+
+            if (newZoom < 0.25f) newZoom = 0.25f;
+            if (newZoom > 3.0f) newZoom = 3.0f;
+
+            if (newZoom == zoomFactor) return;
+
+            zoomFactor = newZoom;
 
             foreach (Control ctrl in this.Controls)
             {
