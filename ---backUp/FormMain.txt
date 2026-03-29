@@ -1,0 +1,21 @@
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+
+namespace CardWeaver
+{
+    public partial class FormMain : Form
+    {
+        public FormMain()
+        {
+            InitializeComponent();
+        }
+
+        private void btnAddCard_Click(object sender, EventArgs e)
+        {
+            var card = new CardWeaver.Controls.CardControl();
+            card.Location = new Point(50, 50); // 初期位置
+            this.Controls.Add(card);
+        }
+    }
+}

@@ -1,0 +1,1 @@
+{"Cards":[{"Location":{"IsEmpty":false,"X":138,"Y":279},"ColorName":"LightYellow"},{"Location":{"IsEmpty":false,"X":139,"Y":96},"ColorName":"LightYellow"},{"Location":{"IsEmpty":false,"X":459,"Y":136},"ColorName":"LightYellow"},{"Location":{"IsEmpty":false,"X":464,"Y":304},"ColorName":"LightYellow"}],"Connections":[{"FromIndex":3,"ToIndex":2},{"FromIndex":1,"ToIndex":2}]}
