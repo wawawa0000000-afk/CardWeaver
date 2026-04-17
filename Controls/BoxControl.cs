@@ -36,6 +36,7 @@ namespace CardWeaver.Controls
 
         public event EventHandler? Dropped;
         public event Action<BoxControl, int, int>? Dragged;
+        public event EventHandler? ComponentActivated;
 
         public BoxControl()
         {
@@ -116,6 +117,8 @@ namespace CardWeaver.Controls
 
         private void BoxControl_MouseDown(object? sender, MouseEventArgs e)
         {
+            ComponentActivated?.Invoke(this, EventArgs.Empty);
+
             if (e.Button == MouseButtons.Left)
             {
                 if (currentResizeDir != ResizeDir.None)

@@ -19,6 +19,7 @@ namespace CardWeaver.Controls
 
         public event EventHandler? CardClicked;
         public event EventHandler? Dropped;
+        public event EventHandler? ComponentActivated;
 
         private const int RESIZE_HANDLE_SIZE = 10;
         private Rectangle resizeHandle;
@@ -122,6 +123,8 @@ namespace CardWeaver.Controls
 
         private void CardControl_MouseDown(object? sender, MouseEventArgs e)
         {
+            ComponentActivated?.Invoke(this, EventArgs.Empty);
+
             if (e.Button == MouseButtons.Left)
             {
                 resizeHandle = new Rectangle(
@@ -140,7 +143,6 @@ namespace CardWeaver.Controls
                 {
                     isDragging = true;
                     dragOffset = e.Location;
-                    this.BringToFront();
                 }
             }
         }

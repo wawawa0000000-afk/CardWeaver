@@ -27,12 +27,15 @@ namespace CardWeaver
         private bool isDarkMode = false;
         private ToolStripLabel? lblCurrentFile;
         private bool suppressOverlayUpdate = false;
+        private CardData? clipboardCardData = null;
+        private CardControl? lastActiveCard = null;
 
         public FormMain()
         {
             InitializeComponent();
             InitializeZoomControls();
 
+            this.KeyPreview = true;
             this.DoubleBuffered = true;
             this.SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
             this.UpdateStyles();
@@ -166,6 +169,26 @@ namespace CardWeaver
 
             var fileMenu = new ToolStripMenuItem("ファイル");
 
+            var newItem = new ToolStripMenuItem("新規作成");
+            newItem.Click += (s, e) =>
+            {
+                if (MessageBox.Show("現在のキャンバスをクリアしますか？未保存のデータは失われます。", "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK)
+                {
+                    this.ControlRemoved -= FormMain_ControlRemoved;
+                    foreach (var card in this.Controls.OfType<CardControl>().ToList()) this.Controls.Remove(card);
+                    foreach (var box in boxes.ToList()) this.Controls.Remove(box);
+                    boxes.Clear();
+                    connections.Clear();
+                    this.ControlRemoved += FormMain_ControlRemoved;
+                    
+                    currentFilePath = null;
+                    UpdateTitleDisplay();
+                    RebuildHierarchy();
+                    UpdateZOrder();
+                    InvalidateOverlay(true);
+                }
+            };
+
             var saveItem = new ToolStripMenuItem("名前を付けて保存");
             saveItem.Click += (s, e) =>
             {
@@ -233,6 +256,7 @@ namespace CardWeaver
                 }
             };
 
+            fileMenu.DropDownItems.Add(newItem);
             fileMenu.DropDownItems.Add(saveItem);
             fileMenu.DropDownItems.Add(overwriteItem);
             fileMenu.DropDownItems.Add(loadItem);
@@ -318,7 +342,7 @@ namespace CardWeaver
             {
                 Text = "ボックス追加",
                 Location = new Point(240, topOffset),
-                Size = new Size(80, 30),
+                Size = new Size(100, 30),
                 BackColor = Color.White,
                 ForeColor = Color.Black
             };
@@ -328,8 +352,8 @@ namespace CardWeaver
             btnStartConnect = new Button
             {
                 Text = "接続モード",
-                Location = new Point(330, topOffset),
-                Size = new Size(80, 30),
+                Location = new Point(350, topOffset),
+                Size = new Size(100, 30),
                 BackColor = Color.White,
                 ForeColor = Color.Black
             };
@@ -353,7 +377,9 @@ namespace CardWeaver
             card.LocationChanged += (s, e) => InvalidateOverlay(true);
             card.SizeChanged += (s, e) => InvalidateOverlay(true);
             card.Dropped += (s, e) => RebuildHierarchy();
+            card.ComponentActivated += (s, e) => UpdateZOrder(card);
             RebuildHierarchy();
+            UpdateZOrder(card);
         }
 
         private void btnAddBox_Click(object? sender, EventArgs e)
@@ -365,7 +391,9 @@ namespace CardWeaver
             boxes.Add(box);
             box.Dropped += (s, e) => RebuildHierarchy();
             box.Dragged += Box_Dragged;
+            box.ComponentActivated += (s, e) => UpdateZOrder(box);
             RebuildHierarchy();
+            UpdateZOrder(box);
         }
 
         private void ChangeZoom(float factor)
@@ -477,6 +505,52 @@ namespace CardWeaver
             if (e.Button == MouseButtons.Left)
             {
                 isPanning = false;
+            }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.Control && e.KeyCode == Keys.C)
+            {
+                if (lastActiveCard != null)
+                {
+                    clipboardCardData = new CardData
+                    {
+                        Location = lastActiveCard.Location,
+                        ColorName = lastActiveCard.BackColor.Name,
+                        Text = lastActiveCard.CardText,
+                        Title = lastActiveCard.TitleText,
+                        Width = lastActiveCard.BaseSize.Width,
+                        Height = lastActiveCard.BaseSize.Height
+                    };
+                }
+            }
+            else if (e.Control && e.KeyCode == Keys.V)
+            {
+                if (clipboardCardData != null)
+                {
+                    var card = new CardControl();
+                    card.Location = new Point(clipboardCardData.Location.X + 20, clipboardCardData.Location.Y + 20);
+                    var loadedColor = Color.FromName(clipboardCardData.ColorName ?? "LightYellow");
+                    card.BackColor = loadedColor.IsKnownColor ? loadedColor : Color.LightYellow;
+                    card.CardText = clipboardCardData.Text ?? string.Empty;
+                    card.TitleText = clipboardCardData.Title ?? "カードタイトル";
+                    card.BaseSize = new Size(clipboardCardData.Width, clipboardCardData.Height);
+                    ApplyZoomToCard(card);
+
+                    card.CardClicked += Card_Clicked;
+                    card.LocationChanged += (s, ev) => InvalidateOverlay(true);
+                    card.SizeChanged += (s, ev) => InvalidateOverlay(true);
+                    card.Dropped += (s, ev) => RebuildHierarchy();
+                    card.ComponentActivated += (s, ev) => UpdateZOrder(card);
+
+                    this.Controls.Add(card);
+                    RebuildHierarchy();
+                    UpdateZOrder(card);
+
+                    clipboardCardData.Location = card.Location;
+                }
             }
         }
 
@@ -669,6 +743,7 @@ namespace CardWeaver
                 card.LocationChanged += (s, e) => InvalidateOverlay(true);
                 card.SizeChanged += (s, e) => InvalidateOverlay(true);
                 card.Dropped += (s, e) => RebuildHierarchy();
+                card.ComponentActivated += (s, e) => UpdateZOrder(card);
                 this.Controls.Add(card);
                 cards.Add(card);
             }
@@ -689,6 +764,7 @@ namespace CardWeaver
                 boxes.Add(box);
                 box.Dropped += (s, e) => RebuildHierarchy();
                 box.Dragged += Box_Dragged;
+                box.ComponentActivated += (s, e) => UpdateZOrder(box);
             }
 
             foreach (var conn in data.Connections)
@@ -702,6 +778,7 @@ namespace CardWeaver
             currentFilePath = path;
             UpdateTitleDisplay();
             RebuildHierarchy();
+            UpdateZOrder();
             InvalidateOverlay(true);
         }
 
@@ -724,6 +801,54 @@ namespace CardWeaver
             } 
             catch { }
             return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        }
+
+        public void UpdateZOrder(Control? activeControl = null)
+        {
+            if (activeControl is CardControl actCard)
+            {
+                lastActiveCard = actCard;
+            }
+
+            this.SuspendLayout();
+
+            var allCards = this.Controls.OfType<CardControl>().ToList();
+            var allBoxes = this.Controls.OfType<BoxControl>().ToList();
+
+            foreach (var box in allBoxes)
+            {
+                if (box != activeControl)
+                {
+                    box.BringToFront();
+                }
+            }
+            if (activeControl is BoxControl activeBox)
+            {
+                activeBox.BringToFront();
+            }
+
+            foreach (var card in allCards)
+            {
+                if (card != activeControl)
+                {
+                    card.BringToFront();
+                }
+            }
+            if (activeControl is CardControl activeCard)
+            {
+                activeCard.BringToFront();
+            }
+
+            var uiControls = this.Controls.OfType<Control>()
+                .Where(c => !(c is CardControl) && !(c is BoxControl))
+                .ToList();
+            foreach (var ui in uiControls)
+            {
+                ui.BringToFront();
+            }
+
+            this.ResumeLayout();
+            this.Invalidate();
         }
     }
 
