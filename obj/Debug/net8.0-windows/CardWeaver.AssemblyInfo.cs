@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CardWeaver")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cb68978538fe17e66ba0718cc78ed1ce2e4b5166")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e88eecb0ae0a94230a9590682a8416ec81c1c98b")]
 [assembly: System.Reflection.AssemblyProductAttribute("CardWeaver")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CardWeaver")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

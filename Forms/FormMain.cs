@@ -5,9 +5,18 @@ using System.Windows.Forms;
 using CardWeaver.Models;
 using System.IO;
 using System.Text.Json;
+using CardWeaver.Forms;
+using CardWeaver.Managers;
+using System.Linq;
+using System.Collections.Generic;
 
-namespace CardWeaver
+namespace CardWeaver.Forms
 {
+    /// <summary>
+    /// アプリケーションのメインキャンバスとなる大元のフォームです。
+    /// カードやボックスの階層・イベントの管理、及びパンニング時のグラフィックを統括します。
+    /// OSS開発者へ: UIの大局的な座標・重なり順処理（Z-Order）を変更したい場合は、このクラス内を調整してください。
+    /// </summary>
     public partial class FormMain : Form
     {
         private float zoomFactor = 1.0f;
@@ -29,6 +38,7 @@ namespace CardWeaver
         private bool suppressOverlayUpdate = false;
         private CardData? clipboardCardData = null;
         private CardControl? lastActiveCard = null;
+        private HistoryManager historyManager = new HistoryManager();
 
         public FormMain()
         {
@@ -48,6 +58,7 @@ namespace CardWeaver
             lineOverlay = new LineOverlayForm(this);
             lineOverlay.Show(this);
             UpdateOverlayBounds();
+            SaveStateToHistory(); // 初回の空状態を履歴に保存
         }
 
         private void FormMain_ControlRemoved(object? sender, ControlEventArgs e)
@@ -107,25 +118,16 @@ namespace CardWeaver
             }
         }
 
+        /// <summary>
+        /// 各カードがどのボックス（親）の上に載っているかを計算し、parentMapにマッピングします。
+        /// OSS拡張ガイド: カード以外の新しい要素を追加した際は、ここにもマッピング判定を追記することで
+        /// ボックスとの自動連帯（ボックスと一緒に動く・整列の基準になるなど）を実装できます。
+        /// </summary>
         private void RebuildHierarchy()
         {
             parentMap.Clear();
             var allCards = this.Controls.OfType<CardControl>().ToList();
             var allBoxes = this.Controls.OfType<BoxControl>().ToList();
-
-            var sortedBoxes = allBoxes.OrderByDescending(b => b.Width * b.Height).ToList();
-
-            foreach (var box in sortedBoxes)
-            {
-                Point center = new Point(box.Left + box.Width / 2, box.Top + box.Height / 2);
-                var parent = sortedBoxes.Where(p => p != box && p.Bounds.Contains(center) && (p.Width * p.Height > box.Width * box.Height))
-                                        .OrderBy(p => p.Width * p.Height)
-                                        .FirstOrDefault();
-                if (parent != null)
-                {
-                    parentMap[box] = parent;
-                }
-            }
 
             foreach (var card in allCards)
             {
@@ -186,6 +188,7 @@ namespace CardWeaver
                     RebuildHierarchy();
                     UpdateZOrder();
                     InvalidateOverlay(true);
+                    SaveStateToHistory();
                 }
             };
 
@@ -262,6 +265,8 @@ namespace CardWeaver
             fileMenu.DropDownItems.Add(loadItem);
 
             var viewMenu = new ToolStripMenuItem("表示");
+            var autoAlignItem = new ToolStripMenuItem("自動整列 (カード)");
+            autoAlignItem.Click += (s, e) => AutoAlignCards();
             var lightModeItem = new ToolStripMenuItem("ライトモード");
             var darkModeItem = new ToolStripMenuItem("ダークモード");
 
@@ -285,6 +290,8 @@ namespace CardWeaver
                 this.Invalidate();
             };
 
+            viewMenu.DropDownItems.Add(autoAlignItem);
+            viewMenu.DropDownItems.Add(new ToolStripSeparator());
             viewMenu.DropDownItems.Add(lightModeItem);
             viewMenu.DropDownItems.Add(darkModeItem);
 
@@ -373,13 +380,10 @@ namespace CardWeaver
             card.Location = new Point(50 + this.Controls.Count * 10, 60 + this.Controls.Count * 10);
             ApplyZoomToCard(card);
             this.Controls.Add(card);
-            card.CardClicked += Card_Clicked;
-            card.LocationChanged += (s, e) => InvalidateOverlay(true);
-            card.SizeChanged += (s, e) => InvalidateOverlay(true);
-            card.Dropped += (s, e) => RebuildHierarchy();
-            card.ComponentActivated += (s, e) => UpdateZOrder(card);
+            AttachCardEvents(card);
             RebuildHierarchy();
             UpdateZOrder(card);
+            SaveStateToHistory();
         }
 
         private void btnAddBox_Click(object? sender, EventArgs e)
@@ -389,11 +393,10 @@ namespace CardWeaver
             ApplyZoomToBox(box);
             this.Controls.Add(box);
             boxes.Add(box);
-            box.Dropped += (s, e) => RebuildHierarchy();
-            box.Dragged += Box_Dragged;
-            box.ComponentActivated += (s, e) => UpdateZOrder(box);
+            AttachBoxEvents(box);
             RebuildHierarchy();
             UpdateZOrder(box);
+            SaveStateToHistory();
         }
 
         private void ChangeZoom(float factor)
@@ -457,6 +460,7 @@ namespace CardWeaver
                 {
                     connections.Remove(clicked);
                     InvalidateOverlay(true);
+                    SaveStateToHistory();
                 }
             }
             else if (e.Button == MouseButtons.Left && !isConnecting)
@@ -539,15 +543,12 @@ namespace CardWeaver
                     card.BaseSize = new Size(clipboardCardData.Width, clipboardCardData.Height);
                     ApplyZoomToCard(card);
 
-                    card.CardClicked += Card_Clicked;
-                    card.LocationChanged += (s, ev) => InvalidateOverlay(true);
-                    card.SizeChanged += (s, ev) => InvalidateOverlay(true);
-                    card.Dropped += (s, ev) => RebuildHierarchy();
-                    card.ComponentActivated += (s, ev) => UpdateZOrder(card);
+                    AttachCardEvents(card);
 
                     this.Controls.Add(card);
                     RebuildHierarchy();
                     UpdateZOrder(card);
+                    SaveStateToHistory();
 
                     clipboardCardData.Location = card.Location;
                 }
@@ -558,6 +559,7 @@ namespace CardWeaver
         {
             connections.Add((from, to));
             InvalidateOverlay(true);
+            SaveStateToHistory();
         }
 
         private void Card_Clicked(object? sender, EventArgs e)
@@ -645,49 +647,8 @@ namespace CardWeaver
 
         private void SaveWorkspace(string path)
         {
-            var data = new WorkspaceData();
-            var cards = this.Controls.OfType<CardControl>().ToList();
-
-            foreach (var card in cards)
-            {
-                data.Cards.Add(new CardData
-                {
-                    Location = card.Location,
-                    ColorName = card.BackColor.Name,
-                    Text = card.CardText,
-                    Title = card.TitleText,
-                    Width = card.BaseSize.Width,
-                    Height = card.BaseSize.Height
-                });
-            }
-
-            foreach (var box in boxes)
-            {
-                data.Boxes.Add(new BoxData
-                {
-                    Location = box.Location,
-                    ColorName = box.BackColor.Name,
-                    Text = box.BoxText,
-                    Width = box.BaseSize.Width,
-                    Height = box.BaseSize.Height
-                });
-            }
-
-            foreach (var conn in connections)
-            {
-                int fromIndex = cards.IndexOf(conn.from);
-                int toIndex = cards.IndexOf(conn.to);
-                if (fromIndex >= 0 && toIndex >= 0)
-                {
-                    data.Connections.Add(new ConnectionData
-                    {
-                        FromIndex = fromIndex,
-                        ToIndex = toIndex
-                    });
-                }
-            }
-
-            string json = JsonSerializer.Serialize(data);
+            var cards = this.Controls.OfType<CardControl>();
+            string json = WorkspaceManager.SerializeWorkspace(cards, boxes, connections);
             File.WriteAllText(path, json);
             currentFilePath = path;
             UpdateTitleDisplay();
@@ -706,8 +667,15 @@ namespace CardWeaver
             if (!File.Exists(path)) return;
 
             string json = File.ReadAllText(path);
-            var data = JsonSerializer.Deserialize<WorkspaceData>(json);
+            LoadWorkspaceFromJson(json);
+            
+            currentFilePath = path;
+            UpdateTitleDisplay();
+        }
 
+        private void LoadWorkspaceFromJson(string json)
+        {
+            var data = WorkspaceManager.DeserializeWorkspace(json);
             if (data == null) return;
 
             this.ControlRemoved -= FormMain_ControlRemoved;
@@ -739,11 +707,7 @@ namespace CardWeaver
                     card.BaseSize = new Size(cardData.Width, cardData.Height);
                 }
                 ApplyZoomToCard(card);
-                card.CardClicked += Card_Clicked;
-                card.LocationChanged += (s, e) => InvalidateOverlay(true);
-                card.SizeChanged += (s, e) => InvalidateOverlay(true);
-                card.Dropped += (s, e) => RebuildHierarchy();
-                card.ComponentActivated += (s, e) => UpdateZOrder(card);
+                AttachCardEvents(card);
                 this.Controls.Add(card);
                 cards.Add(card);
             }
@@ -762,9 +726,7 @@ namespace CardWeaver
                 ApplyZoomToBox(box);
                 this.Controls.Add(box);
                 boxes.Add(box);
-                box.Dropped += (s, e) => RebuildHierarchy();
-                box.Dragged += Box_Dragged;
-                box.ComponentActivated += (s, e) => UpdateZOrder(box);
+                AttachBoxEvents(box);
             }
 
             foreach (var conn in data.Connections)
@@ -775,8 +737,6 @@ namespace CardWeaver
                 }
             }
 
-            currentFilePath = path;
-            UpdateTitleDisplay();
             RebuildHierarchy();
             UpdateZOrder();
             InvalidateOverlay(true);
@@ -849,45 +809,6 @@ namespace CardWeaver
 
             this.ResumeLayout();
             this.Invalidate();
-        }
-    }
-
-    public class LineOverlayForm : Form
-    {
-        private FormMain _parent;
-
-        public LineOverlayForm(FormMain parent)
-        {
-            _parent = parent;
-            this.FormBorderStyle = FormBorderStyle.None;
-            this.ShowInTaskbar = false;
-            this.BackColor = Color.Magenta;
-            this.TransparencyKey = Color.Magenta;
-            this.StartPosition = FormStartPosition.Manual;
-        }
-
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                var cp = base.CreateParams;
-                cp.ExStyle |= 0x80000;  // WS_EX_LAYERED
-                cp.ExStyle |= 0x20;     // WS_EX_TRANSPARENT
-                cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE
-                return cp;
-            }
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            _parent.DrawConnectionsOnGraphics(e.Graphics);
-        }
-
-        protected override void OnPaintBackground(PaintEventArgs e)
-        {
-            base.OnPaintBackground(e);
         }
     }
 }

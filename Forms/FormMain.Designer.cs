@@ -1,4 +1,4 @@
-﻿namespace CardWeaver
+namespace CardWeaver.Forms
 {
     partial class FormMain
     {

@@ -8,7 +8,6 @@ C:\Users\fukuf\Desktop\CardWeaver\bin\Debug\net8.0-windows\CardWeaver.deps.json
 C:\Users\fukuf\Desktop\CardWeaver\bin\Debug\net8.0-windows\CardWeaver.runtimeconfig.json
 C:\Users\fukuf\Desktop\CardWeaver\bin\Debug\net8.0-windows\CardWeaver.dll
 C:\Users\fukuf\Desktop\CardWeaver\bin\Debug\net8.0-windows\CardWeaver.pdb
-C:\Users\fukuf\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.FormMain.resources
 C:\Users\fukuf\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.dll
 C:\Users\fukuf\Desktop\CardWeaver\obj\Debug\net8.0-windows\refint\CardWeaver.dll
 C:\Users\fukuf\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.pdb
@@ -36,3 +35,4 @@ C:\Users\wawaw\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.genruntime
 C:\Users\wawaw\Desktop\CardWeaver\obj\Debug\net8.0-windows\ref\CardWeaver.dll
 C:\Users\wawaw\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.sourcelink.json
 C:\Users\fukuf\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.sourcelink.json
+c:\Users\fukuf\Desktop\CardWeaver\obj\Debug\net8.0-windows\CardWeaver.Forms.FormMain.resources

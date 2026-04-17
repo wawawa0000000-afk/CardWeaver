@@ -4,6 +4,13 @@ using System.Windows.Forms;
 
 namespace CardWeaver.Controls
 {
+    /// <summary>
+    /// キャンバス上に配置される「ボックス（論理的なグループ枠）」のUIコントロールです。
+    /// OSS開発者へ: 
+    /// - ボックス自体がカードを物理的な子要素（Controls）として取り込むことはありません。
+    ///   重ね合わせ（Z-Order）と FormMain 側での parentMap 計算によって「中に入っている」ように見せています。
+    /// - これにより、ネスト時の座標崩壊や拡大縮小のバグを防ぎ、純粋なグループ分離としての可用性を担保しています。
+    /// </summary>
     public class BoxControl : UserControl
     {
         private Label headerLabel;
@@ -34,9 +41,14 @@ namespace CardWeaver.Controls
         public Size BaseSize { get; set; } = new Size(150, 80);
         public float CurrentZoom { get; set; } = 1.0f;
 
+        /// <summary>ドラッグでの移動が完了し、離された（ドロップされた）瞬間に発火します。</summary>
         public event EventHandler? Dropped;
+        /// <summary>ドラッグ中に発火し、FormMain側で上に載っているカード群を同時に追従移動させるためのアクションです。</summary>
         public event Action<BoxControl, int, int>? Dragged;
+        /// <summary>ボックスがアクティブになった際に、FormMain側でZ-Orderの背面側に回す（カードより手前に来ないようにする）ためのフックです。</summary>
         public event EventHandler? ComponentActivated;
+        /// <summary>テキスト編集完了・カラー変更等の状態変化イベント。HistoryManager のスナップショット保存に繋がります。</summary>
+        public event EventHandler? DataChanged;
 
         public BoxControl()
         {
@@ -110,7 +122,14 @@ namespace CardWeaver.Controls
 
         private void EndEdit(bool save = true)
         {
-            if (save) contentLabel.Text = editBox.Text;
+            if (save) 
+            {
+                if (contentLabel.Text != editBox.Text)
+                {
+                    contentLabel.Text = editBox.Text;
+                    DataChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
             editBox.Visible = false;
             contentLabel.Visible = true;
         }
@@ -243,7 +262,11 @@ namespace CardWeaver.Controls
         {
             if (sender is ToolStripMenuItem item && item.Tag is Color selectedColor)
             {
-                this.BackColor = selectedColor;
+                if (this.BackColor != selectedColor)
+                {
+                    this.BackColor = selectedColor;
+                    DataChanged?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 

@@ -4,6 +4,14 @@ using System.Windows.Forms;
 
 namespace CardWeaver.Controls
 {
+    /// <summary>
+    /// キャンバス上に配置される「カード（アイデア）」のUIコントロールです。
+    /// OSS開発者へ: 
+    /// - テキスト以外の新しいプロパティ（例: 画像URL、チェックボックス状態）を追加する場合は、
+    ///   Models/WorkspaceData.cs の CardData クラスにも同等のプロパティを追加し、
+    ///   WorkspaceManager のシリアライズ/デシリアライズ処理に追記してください。
+    /// - UIの見た目や操作感を変更したい場合は、独自の UserControl を作成して本クラスと差し替えることも可能です。
+    /// </summary>
     public class CardControl : UserControl
     {
         private Label titleLabel;
@@ -17,9 +25,14 @@ namespace CardWeaver.Controls
 
         private ContextMenuStrip? colorMenu;
 
+        /// <summary>ユーザーがカードをクリックして「接続モード」の始点とした際に発火します。</summary>
         public event EventHandler? CardClicked;
+        /// <summary>ドラッグでの移動が完了し、離された（ドロップされた）瞬間に発火します。ここでZ-Orderやボックス所属の再計算が行われます。</summary>
         public event EventHandler? Dropped;
+        /// <summary>マウスダウンやクリックで「アクティブ（操作中）」に切り替わった際に発火し、最前面に持ち上げるためのフックです。</summary>
         public event EventHandler? ComponentActivated;
+        /// <summary>テキスト編集の完了時や色の変更時など、内部データが変化した際に発火します。HistoryManager (Undo/Redo) への状態保存トリガーとなります。</summary>
+        public event EventHandler? DataChanged;
 
         private const int RESIZE_HANDLE_SIZE = 10;
         private Rectangle resizeHandle;
@@ -74,6 +87,7 @@ namespace CardWeaver.Controls
             };
 
             contentBox.Click += (s, e) => this.OnClick(EventArgs.Empty);
+            contentBox.Leave += (s, e) => DataChanged?.Invoke(this, EventArgs.Empty);
 
             this.MouseDown += CardControl_MouseDown;
             this.MouseMove += CardControl_MouseMove;
@@ -116,7 +130,13 @@ namespace CardWeaver.Controls
         private void EndTitleEdit(bool save = true)
         {
             if (save && !string.IsNullOrWhiteSpace(titleEditBox.Text)) 
-                titleLabel.Text = titleEditBox.Text;
+            {
+                if (titleLabel.Text != titleEditBox.Text)
+                {
+                    titleLabel.Text = titleEditBox.Text;
+                    DataChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
             titleEditBox.Visible = false;
             titleLabel.Visible = true;
         }
@@ -244,8 +264,12 @@ namespace CardWeaver.Controls
         {
             if (sender is ToolStripMenuItem item && item.Tag is Color selectedColor)
             {
-                this.BackColor = selectedColor;
-                contentBox.BackColor = selectedColor;
+                if (this.BackColor != selectedColor)
+                {
+                    this.BackColor = selectedColor;
+                    contentBox.BackColor = selectedColor;
+                    DataChanged?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 

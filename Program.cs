@@ -1,3 +1,5 @@
+using CardWeaver.Forms;
+
 namespace CardWeaver
 {
     internal static class Program
